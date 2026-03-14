@@ -1,57 +1,118 @@
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {
+  AppState,
+  AppStateStatus,
   Alert,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {CategorySelector} from '../components/CategorySelector';
 import {AmountInput} from '../components/AmountInput';
-import {CATEGORIES} from '../utils/constants';
+import {CATEGORIES, UPI_APPS, UpiAppOption} from '../utils/constants';
 import {RootStackParamList} from '../navigation/types';
-import {startUpiPayment} from '../services/upiService';
 import {createTransaction} from '../services/transactionService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Payment'>;
 
 const sanitizeAmount = (value: string): string => value.replace(/[^\d.]/g, '');
-const MAX_UPI_DEEPLINK_AMOUNT = 20000;
 
-export const PaymentScreen = ({navigation, route}: Props) => {
-  const [upiId, setUpiId] = useState('');
+export const PaymentScreen = ({navigation}: Props) => {
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState(CATEGORIES[0]);
+  const [selectedUpiApp, setSelectedUpiApp] = useState<UpiAppOption | null>(
+    UPI_APPS[0] ?? null,
+  );
   const [loading, setLoading] = useState(false);
+  const [waitingForConfirmation, setWaitingForConfirmation] = useState(false);
 
-  const scannedData = route.params?.scannedData;
-
-  useEffect(() => {
-    if (!scannedData) {
-      return;
-    }
-
-    setUpiId(scannedData.upiId);
-
-    if (typeof scannedData.amount === 'number' && scannedData.amount > 0) {
-      setAmount(scannedData.amount.toFixed(2));
-    }
-
-    navigation.setParams({scannedData: undefined});
-  }, [navigation, scannedData]);
+  const currentAppStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const promptOpenRef = useRef(false);
+  const pendingTransactionRef = useRef<{
+    amount: number;
+    category: string;
+    selectedUpiApp: UpiAppOption;
+  } | null>(null);
 
   const amountValue = useMemo(() => Number(amount), [amount]);
 
-  const onPay = async () => {
-    if (!upiId.trim()) {
-      Alert.alert('Missing UPI ID', 'Please enter a valid UPI ID.');
+  const saveTransaction = async (status: 'SUCCESS' | 'FAILED') => {
+    const pendingTransaction = pendingTransactionRef.current;
+    if (!pendingTransaction) {
       return;
     }
 
+    await createTransaction({
+      amount: pendingTransaction.amount,
+      category: pendingTransaction.category,
+      upiId: pendingTransaction.selectedUpiApp.label,
+      status,
+    });
+  };
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextState => {
+      const previousState = currentAppStateRef.current;
+      currentAppStateRef.current = nextState;
+
+      if (!waitingForConfirmation || promptOpenRef.current) {
+        return;
+      }
+
+      const returnedToApp =
+        (previousState === 'inactive' || previousState === 'background') &&
+        nextState === 'active';
+
+      if (!returnedToApp) {
+        return;
+      }
+
+      promptOpenRef.current = true;
+      Alert.alert('Payment Confirmation', 'Did payment succeed?', [
+        {
+          text: 'No',
+          style: 'destructive',
+          onPress: () => {
+            saveTransaction('FAILED')
+              .then(() => {
+                Alert.alert('Saved', 'Marked as failed transaction.');
+              })
+              .finally(() => {
+                pendingTransactionRef.current = null;
+                setWaitingForConfirmation(false);
+                promptOpenRef.current = false;
+              });
+          },
+        },
+        {
+          text: 'Yes',
+          onPress: () => {
+            saveTransaction('SUCCESS')
+              .then(() => {
+                Alert.alert('Payment Success', 'Transaction saved locally.');
+                navigation.navigate('Dashboard');
+              })
+              .finally(() => {
+                pendingTransactionRef.current = null;
+                setWaitingForConfirmation(false);
+                promptOpenRef.current = false;
+              });
+          },
+        },
+      ]);
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [navigation, waitingForConfirmation]);
+
+  const onPay = async () => {
     if (!amount || Number.isNaN(amountValue) || amountValue <= 0) {
       Alert.alert(
         'Invalid Amount',
@@ -60,35 +121,28 @@ export const PaymentScreen = ({navigation, route}: Props) => {
       return;
     }
 
-    if (amountValue > MAX_UPI_DEEPLINK_AMOUNT) {
-      Alert.alert(
-        'UPI App Limit',
-        'Some UPI apps limit deeplink or QR-style payments to INR 20,000. Please reduce the amount, split the payment, or scan and pay directly inside your UPI app.',
-      );
+    if (!selectedUpiApp) {
+      Alert.alert('UPI App Required', 'Please select a UPI app first.');
       return;
     }
 
     setLoading(true);
 
     try {
-      const result = await startUpiPayment(upiId.trim(), amountValue);
+      pendingTransactionRef.current = {
+        amount: amountValue,
+        category,
+        selectedUpiApp,
+      };
 
-      if (result.status === 'SUCCESS') {
-        await createTransaction({
-          amount: amountValue,
-          category,
-          upiId: upiId.trim(),
-          status: result.status,
-          txnId: result.txnId,
-        });
-
-        Alert.alert('Payment Success', 'Transaction saved locally.');
-        navigation.navigate('Dashboard');
-      } else {
-        Alert.alert('Payment Not Completed', `Status: ${result.status}`);
-      }
+      await Linking.openURL(selectedUpiApp.scheme);
+      setWaitingForConfirmation(true);
     } catch {
-      Alert.alert('Payment Error', 'Could not launch UPI payment flow.');
+      pendingTransactionRef.current = null;
+      Alert.alert(
+        'Open UPI App Failed',
+        `Could not open ${selectedUpiApp.label}. Make sure it is installed.`,
+      );
     } finally {
       setLoading(false);
     }
@@ -101,18 +155,8 @@ export const PaymentScreen = ({navigation, route}: Props) => {
       <View style={styles.card}>
         <Text style={styles.title}>UPI Payment Wrapper</Text>
         <Text style={styles.subtitle}>
-          Track spending by category before paying.
+          Enter amount, choose category, open a UPI app, and confirm payment.
         </Text>
-
-        <Text style={styles.label}>UPI ID</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="name@bank"
-          placeholderTextColor="#64748b"
-          autoCapitalize="none"
-          value={upiId}
-          onChangeText={setUpiId}
-        />
 
         <AmountInput
           value={amount}
@@ -125,19 +169,35 @@ export const PaymentScreen = ({navigation, route}: Props) => {
           onChange={setCategory}
         />
 
+        <Text style={styles.label}>UPI App</Text>
+        <View style={styles.appsWrap}>
+          {UPI_APPS.map(app => {
+            const isSelected = selectedUpiApp?.id === app.id;
+
+            return (
+              <TouchableOpacity
+                key={app.id}
+                style={[styles.appChip, isSelected && styles.appChipSelected]}
+                onPress={() => setSelectedUpiApp(app)}>
+                <Text
+                  style={[
+                    styles.appChipText,
+                    isSelected && styles.appChipTextSelected,
+                  ]}>
+                  {app.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
         <TouchableOpacity
           style={[styles.actionButton, loading && styles.disabled]}
           onPress={onPay}
           disabled={loading}>
           <Text style={styles.actionButtonText}>
-            {loading ? 'Processing...' : 'Pay'}
+            {loading ? 'Opening App...' : 'Pay'}
           </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.secondaryButton}
-          onPress={() => navigation.navigate('Scanner')}>
-          <Text style={styles.secondaryButtonText}>Scan QR</Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -174,16 +234,31 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 8,
   },
-  input: {
-    borderRadius: 12,
-    borderColor: '#d6dee8',
+  appsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 8,
+  },
+  appChip: {
     borderWidth: 1,
-    backgroundColor: '#ffffff',
+    borderColor: '#cbd5e1',
+    borderRadius: 24,
     paddingHorizontal: 12,
-    height: 48,
-    fontSize: 16,
-    color: '#0f172a',
-    marginBottom: 16,
+    paddingVertical: 8,
+    backgroundColor: '#ffffff',
+  },
+  appChipSelected: {
+    backgroundColor: '#115e59',
+    borderColor: '#115e59',
+  },
+  appChipText: {
+    color: '#334155',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  appChipTextSelected: {
+    color: '#ffffff',
   },
   actionButton: {
     marginTop: 8,
@@ -196,21 +271,6 @@ const styles = StyleSheet.create({
   actionButtonText: {
     color: '#ffffff',
     fontSize: 16,
-    fontWeight: '700',
-  },
-  secondaryButton: {
-    marginTop: 10,
-    height: 48,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#115e59',
-    backgroundColor: '#eef8f7',
-  },
-  secondaryButtonText: {
-    color: '#115e59',
-    fontSize: 15,
     fontWeight: '700',
   },
   disabled: {
