@@ -21,6 +21,7 @@ import {createTransaction} from '../services/transactionService';
 type Props = NativeStackScreenProps<RootStackParamList, 'Payment'>;
 
 const sanitizeAmount = (value: string): string => value.replace(/[^\d.]/g, '');
+const GENERIC_UPI_URL = 'upi://pay?cu=INR';
 
 export const PaymentScreen = ({navigation}: Props) => {
   const [amount, setAmount] = useState('');
@@ -34,6 +35,7 @@ export const PaymentScreen = ({navigation}: Props) => {
   const currentAppStateRef = useRef<AppStateStatus>(AppState.currentState);
   const promptOpenRef = useRef(false);
   const launchedUpiFlowRef = useRef(false);
+  const didGoBackgroundRef = useRef(false);
   const pendingTransactionRef = useRef<{
     amount: number;
     category: string;
@@ -69,9 +71,18 @@ export const PaymentScreen = ({navigation}: Props) => {
         return;
       }
 
+      if (
+        previousState === 'active' &&
+        (nextState === 'inactive' || nextState === 'background')
+      ) {
+        didGoBackgroundRef.current = true;
+        return;
+      }
+
       const returnedToApp =
         (previousState === 'inactive' || previousState === 'background') &&
-        nextState === 'active';
+        nextState === 'active' &&
+        didGoBackgroundRef.current;
 
       if (!returnedToApp) {
         return;
@@ -91,6 +102,7 @@ export const PaymentScreen = ({navigation}: Props) => {
                 pendingTransactionRef.current = null;
                 setWaitingForConfirmation(false);
                 launchedUpiFlowRef.current = false;
+                didGoBackgroundRef.current = false;
                 promptOpenRef.current = false;
               });
           },
@@ -107,6 +119,7 @@ export const PaymentScreen = ({navigation}: Props) => {
                 pendingTransactionRef.current = null;
                 setWaitingForConfirmation(false);
                 launchedUpiFlowRef.current = false;
+                didGoBackgroundRef.current = false;
                 promptOpenRef.current = false;
               });
           },
@@ -142,15 +155,42 @@ export const PaymentScreen = ({navigation}: Props) => {
         selectedUpiApp,
       };
 
-      await Linking.openURL(selectedUpiApp.scheme);
+      didGoBackgroundRef.current = false;
+
+      let opened = false;
+      const canOpenSelected = await Linking.canOpenURL(selectedUpiApp.scheme);
+      if (canOpenSelected) {
+        await Linking.openURL(selectedUpiApp.scheme);
+        opened = true;
+      }
+
+      if (!opened) {
+        const canOpenGenericUpi = await Linking.canOpenURL(GENERIC_UPI_URL);
+        if (canOpenGenericUpi) {
+          await Linking.openURL(GENERIC_UPI_URL);
+          opened = true;
+        }
+      }
+
+      if (!opened) {
+        pendingTransactionRef.current = null;
+        launchedUpiFlowRef.current = false;
+        Alert.alert(
+          'UPI App Not Available',
+          'Could not open the selected UPI app. Please try another app.',
+        );
+        return;
+      }
+
       launchedUpiFlowRef.current = true;
       setWaitingForConfirmation(true);
     } catch {
       pendingTransactionRef.current = null;
       launchedUpiFlowRef.current = false;
+      didGoBackgroundRef.current = false;
       Alert.alert(
         'Open UPI App Failed',
-        `Could not open ${selectedUpiApp.label}. Make sure it is installed.`,
+        `Could not open ${selectedUpiApp.label}. Try Google Pay or another installed UPI app.`,
       );
     } finally {
       setLoading(false);
@@ -208,6 +248,20 @@ export const PaymentScreen = ({navigation}: Props) => {
             {loading ? 'Opening App...' : 'Pay'}
           </Text>
         </TouchableOpacity>
+
+        <View style={styles.navRow}>
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => navigation.navigate('Dashboard')}>
+            <Text style={styles.secondaryButtonText}>Dashboard</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => navigation.navigate('History')}>
+            <Text style={styles.secondaryButtonText}>History</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -284,5 +338,25 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.6,
+  },
+  navRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  secondaryButton: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#115e59',
+    backgroundColor: '#eef8f7',
+  },
+  secondaryButtonText: {
+    color: '#115e59',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

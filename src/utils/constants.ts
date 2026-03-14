@@ -22,12 +22,12 @@ export const UPI_APPS: UpiAppOption[] = [
   {
     id: 'phonepe',
     label: 'PhonePe',
-    scheme: 'phonepe://',
+    scheme: 'phonepe://pay',
   },
   {
     id: 'paytm',
     label: 'Paytm',
-    scheme: 'paytmmp://',
+    scheme: 'paytmmp://upi/pay',
   },
   {
     id: 'bhim',
