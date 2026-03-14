@@ -33,6 +33,7 @@ export const PaymentScreen = ({navigation}: Props) => {
 
   const currentAppStateRef = useRef<AppStateStatus>(AppState.currentState);
   const promptOpenRef = useRef(false);
+  const launchedUpiFlowRef = useRef(false);
   const pendingTransactionRef = useRef<{
     amount: number;
     category: string;
@@ -60,7 +61,11 @@ export const PaymentScreen = ({navigation}: Props) => {
       const previousState = currentAppStateRef.current;
       currentAppStateRef.current = nextState;
 
-      if (!waitingForConfirmation || promptOpenRef.current) {
+      if (
+        !waitingForConfirmation ||
+        !launchedUpiFlowRef.current ||
+        promptOpenRef.current
+      ) {
         return;
       }
 
@@ -85,6 +90,7 @@ export const PaymentScreen = ({navigation}: Props) => {
               .finally(() => {
                 pendingTransactionRef.current = null;
                 setWaitingForConfirmation(false);
+                launchedUpiFlowRef.current = false;
                 promptOpenRef.current = false;
               });
           },
@@ -100,6 +106,7 @@ export const PaymentScreen = ({navigation}: Props) => {
               .finally(() => {
                 pendingTransactionRef.current = null;
                 setWaitingForConfirmation(false);
+                launchedUpiFlowRef.current = false;
                 promptOpenRef.current = false;
               });
           },
@@ -136,9 +143,11 @@ export const PaymentScreen = ({navigation}: Props) => {
       };
 
       await Linking.openURL(selectedUpiApp.scheme);
+      launchedUpiFlowRef.current = true;
       setWaitingForConfirmation(true);
     } catch {
       pendingTransactionRef.current = null;
+      launchedUpiFlowRef.current = false;
       Alert.alert(
         'Open UPI App Failed',
         `Could not open ${selectedUpiApp.label}. Make sure it is installed.`,
