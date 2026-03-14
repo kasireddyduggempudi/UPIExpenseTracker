@@ -8,6 +8,7 @@ import {
   Platform,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -23,13 +24,12 @@ type PaymentMode = 'MANUAL' | 'INTENT';
 
 const sanitizeAmount = (value: string): string => value.replace(/[^\d.]/g, '');
 const GENERIC_UPI_URL = 'upi://pay?cu=INR';
-const INTENT_PAYEE_VPA = 'decorpay@upi';
 const INTENT_PAYEE_NAME = 'DecorPay';
 
-const buildUpiIntentUrl = (amountValue: number): string => {
+const buildUpiIntentUrl = (payeeVpa: string, amountValue: number): string => {
   const transactionRef = `DCP-${Date.now()}`;
   const params = new URLSearchParams({
-    pa: INTENT_PAYEE_VPA,
+    pa: payeeVpa,
     pn: INTENT_PAYEE_NAME,
     tr: transactionRef,
     tn: 'DecorPay Payment',
@@ -47,6 +47,7 @@ const buildUpiIntentUrl = (amountValue: number): string => {
 export const PaymentScreen = ({navigation}: Props) => {
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('MANUAL');
   const [amount, setAmount] = useState('');
+  const [intentUpiId, setIntentUpiId] = useState('');
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [selectedUpiApp, setSelectedUpiApp] = useState<UpiAppOption | null>(
     UPI_APPS[0] ?? null,
@@ -63,6 +64,7 @@ export const PaymentScreen = ({navigation}: Props) => {
     category: string;
     selectedUpiApp: UpiAppOption;
     mode: PaymentMode;
+    intentUpiId?: string;
   } | null>(null);
 
   const amountValue = useMemo(() => Number(amount), [amount]);
@@ -78,7 +80,7 @@ export const PaymentScreen = ({navigation}: Props) => {
       category: pendingTransaction.category,
       upiId:
         pendingTransaction.mode === 'INTENT'
-          ? 'UPI Intent'
+          ? pendingTransaction.intentUpiId ?? 'UPI Intent'
           : pendingTransaction.selectedUpiApp.label,
       status,
     });
@@ -200,8 +202,8 @@ export const PaymentScreen = ({navigation}: Props) => {
     setWaitingForConfirmation(true);
   };
 
-  const openIntentFlow = async (amountValueToPay: number) => {
-    const intentUrl = buildUpiIntentUrl(amountValueToPay);
+  const openIntentFlow = async (amountValueToPay: number, payeeVpa: string) => {
+    const intentUrl = buildUpiIntentUrl(payeeVpa, amountValueToPay);
     const canOpenIntent = await Linking.canOpenURL(intentUrl);
 
     if (!canOpenIntent) {
@@ -217,6 +219,7 @@ export const PaymentScreen = ({navigation}: Props) => {
       category,
       selectedUpiApp: selectedUpiApp ?? UPI_APPS[0],
       mode: 'INTENT',
+      intentUpiId: payeeVpa,
     };
 
     didGoBackgroundRef.current = false;
@@ -239,13 +242,24 @@ export const PaymentScreen = ({navigation}: Props) => {
       return;
     }
 
+    if (paymentMode === 'INTENT') {
+      const vpa = intentUpiId.trim();
+      if (!vpa || !vpa.includes('@')) {
+        Alert.alert(
+          'UPI ID Required',
+          'Please enter a valid UPI ID for intent mode.',
+        );
+        return;
+      }
+    }
+
     setLoading(true);
 
     try {
       if (paymentMode === 'MANUAL') {
         await openManualFlow(amountValue, selectedUpiApp as UpiAppOption);
       } else {
-        await openIntentFlow(amountValue);
+        await openIntentFlow(amountValue, intentUpiId.trim());
       }
     } catch {
       pendingTransactionRef.current = null;
@@ -351,10 +365,21 @@ export const PaymentScreen = ({navigation}: Props) => {
               Direct intent uses standard UPI URL and does not pass amount in
               the link.
             </Text>
+            <Text style={styles.label}>UPI ID</Text>
+            <TextInput
+              style={styles.intentInput}
+              placeholder="merchant@upi"
+              placeholderTextColor="#64748b"
+              autoCapitalize="none"
+              value={intentUpiId}
+              onChangeText={setIntentUpiId}
+            />
             <Text style={styles.intentInfoMeta}>
               Payee: {INTENT_PAYEE_NAME}
             </Text>
-            <Text style={styles.intentInfoMeta}>VPA: {INTENT_PAYEE_VPA}</Text>
+            <Text style={styles.intentInfoMeta}>
+              VPA: {intentUpiId.trim() || '-'}
+            </Text>
           </View>
         )}
 
@@ -488,6 +513,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     marginTop: 4,
+  },
+  intentInput: {
+    borderRadius: 10,
+    borderColor: '#d6dee8',
+    borderWidth: 1,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 10,
+    height: 44,
+    fontSize: 15,
+    color: '#0f172a',
+    marginBottom: 6,
   },
   actionButton: {
     marginTop: 8,
