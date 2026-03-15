@@ -114,7 +114,7 @@ function TransactionRow({
           <TouchableOpacity
             style={styles.editButton}
             onPress={() => onEdit(transaction)}>
-            <Text style={styles.editText}>Edit</Text>
+            <Text style={styles.editText}>✏️</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.deleteButton} onPress={confirmDelete}>
             <Text style={styles.deleteText}>🗑</Text>
@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
   transactionAmount: {fontSize: 15, fontWeight: '700', color: TEXT_PRIMARY},
   actionRow: {flexDirection: 'row', gap: 10},
   editButton: {paddingVertical: 4},
-  editText: {fontSize: 13, color: PRIMARY, fontWeight: '600'},
+  editText: {fontSize: 16, color: PRIMARY},
   deleteButton: {paddingVertical: 4},
   deleteText: {fontSize: 16, color: DANGER},
   emptyText: {
