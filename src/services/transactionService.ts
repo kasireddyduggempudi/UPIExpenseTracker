@@ -1,85 +1,53 @@
-import {
-  CategorySpend,
-  getAllTransactions,
-  getCategorySpend,
-  getMonthlySpend,
-  initDatabase,
-  insertTransaction,
-} from '../database/sqlite';
-import {Transaction, TransactionStatus} from '../models/Transaction';
+/**
+ * TransactionService
+ *
+ * Thin business-logic layer that all screens call.
+ * Uses ITransactionRepository — swap `activeRepository` to point at
+ * an API-backed implementation and nothing else changes in screens.
+ */
+import {ITransactionRepository} from '../repositories/ITransactionRepository';
+import {sqliteRepository} from '../repositories/SqliteTransactionRepository';
+import {Transaction} from '../models/Transaction';
+import {MonthlySummary, YearlySummary} from '../models/Summary';
 
-export interface CreateTransactionInput {
-  amount: number;
-  category: string;
-  upiId: string;
-  status: TransactionStatus;
-  txnId?: string;
+// ─── Swap here to use a remote API ────────────────────────────────────────────
+// import {apiRepository} from '../repositories/ApiTransactionRepository';
+// const activeRepository: ITransactionRepository = apiRepository;
+const activeRepository: ITransactionRepository = sqliteRepository;
+// ──────────────────────────────────────────────────────────────────────────────
+
+export async function initTransactionService(): Promise<void> {
+  await activeRepository.init();
 }
 
-export interface DashboardStats {
-  monthlySpend: number;
-  weeklySpend: number;
-  categorySpend: CategorySpend[];
+/** Alias for backward-compat with AppNavigator init call */
+export const initializeTransactionStore = initTransactionService;
+
+export async function addExpense(
+  data: Omit<Transaction, 'id' | 'createdAt'>,
+): Promise<Transaction> {
+  return activeRepository.add(data);
 }
 
-const isSuccessTransaction = (transaction: Transaction): boolean =>
-  transaction.status === 'SUCCESS';
+export async function getTransactionsByMonth(
+  year: number,
+  month: number,
+): Promise<Transaction[]> {
+  return activeRepository.getByMonth(year, month);
+}
 
-export const initializeTransactionStore = async (): Promise<void> => {
-  await initDatabase();
-};
+/** Monthly summaries for the last 24 months, newest first. */
+export async function getLast2YearsMonthlySummaries(): Promise<
+  MonthlySummary[]
+> {
+  return activeRepository.getMonthlySummaries(24);
+}
 
-export const createTransaction = async (
-  input: CreateTransactionInput,
-): Promise<Transaction> => {
-  const transaction: Transaction = {
-    id: `${Date.now()}-${Math.floor(Math.random() * 100000)}`,
-    amount: input.amount,
-    category: input.category,
-    upiId: input.upiId,
-    date: new Date().toISOString(),
-    status: input.status,
-    txnId: input.txnId,
-  };
+/** Yearly summaries for the last 5 years, newest first. */
+export async function getLast5YearsYearlySummaries(): Promise<YearlySummary[]> {
+  return activeRepository.getYearlySummaries(5);
+}
 
-  await insertTransaction(transaction);
-  return transaction;
-};
-
-export const listTransactions = async (): Promise<Transaction[]> => {
-  const rows = await getAllTransactions();
-  return rows;
-};
-
-export const getDashboardStats = async (): Promise<DashboardStats> => {
-  const [monthlySpend, categorySpend, allTransactions] = await Promise.all([
-    getMonthlySpend(),
-    getCategorySpend(),
-    getAllTransactions(),
-  ]);
-
-  const now = Date.now();
-  const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
-
-  const weeklySpend = allTransactions
-    .filter(transaction => {
-      const transactionTime = new Date(transaction.date).getTime();
-      return (
-        transactionTime >= sevenDaysAgo &&
-        transactionTime <= now &&
-        isSuccessTransaction(transaction)
-      );
-    })
-    .reduce((acc, transaction) => acc + transaction.amount, 0);
-
-  const safeCategorySpend = categorySpend.map(item => ({
-    category: item.category,
-    total: Number.isNaN(item.total) ? 0 : item.total,
-  }));
-
-  return {
-    monthlySpend,
-    weeklySpend,
-    categorySpend: safeCategorySpend,
-  };
-};
+export async function deleteExpense(id: string): Promise<void> {
+  return activeRepository.delete(id);
+}

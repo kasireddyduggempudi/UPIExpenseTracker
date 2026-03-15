@@ -1,50 +1,45 @@
 import React, {useEffect} from 'react';
-import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {Alert} from 'react-native';
-import {PaymentScreen} from '../screens/PaymentScreen';
-import {ScannerScreen} from '../screens/ScannerScreen';
-import {DashboardScreen} from '../screens/DashboardScreen';
-import {HistoryScreen} from '../screens/HistoryScreen';
+import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {RootStackParamList} from './types';
-import {initializeTransactionStore} from '../services/transactionService';
+import {initTransactionService} from '../services/transactionService';
+import {DashboardScreen} from '../screens/DashboardScreen';
+import {AddExpenseScreen} from '../screens/AddExpenseScreen';
+import {MonthDetailScreen} from '../screens/MonthDetailScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-export const AppNavigator = () => {
+const screenOptions = {
+  headerStyle: {backgroundColor: '#FFFFFF'},
+  headerTitleStyle: {fontWeight: '700' as const},
+  headerTintColor: '#2D6A4F',
+  contentStyle: {backgroundColor: '#F8FAF9'},
+};
+
+export function AppNavigator() {
   useEffect(() => {
-    initializeTransactionStore().catch(() => {
+    initTransactionService().catch(() => {
       Alert.alert('Database Error', 'Could not initialize local database.');
     });
   }, []);
 
   return (
-    <Stack.Navigator
-      initialRouteName="Payment"
-      screenOptions={{
-        headerStyle: {backgroundColor: '#ffffff'},
-        headerTitleStyle: {fontWeight: '700'},
-        contentStyle: {backgroundColor: '#f4f7fb'},
-      }}>
-      <Stack.Screen
-        name="Payment"
-        component={PaymentScreen}
-        options={{title: 'DecorPay'}}
-      />
-      <Stack.Screen
-        name="Scanner"
-        component={ScannerScreen}
-        options={{title: 'Scan UPI QR'}}
-      />
+    <Stack.Navigator initialRouteName="Dashboard" screenOptions={screenOptions}>
       <Stack.Screen
         name="Dashboard"
         component={DashboardScreen}
-        options={{title: 'Dashboard'}}
+        options={{title: 'DKLedger'}}
       />
       <Stack.Screen
-        name="History"
-        component={HistoryScreen}
-        options={{title: 'Transaction History'}}
+        name="AddExpense"
+        component={AddExpenseScreen}
+        options={{title: 'Add Expense'}}
+      />
+      <Stack.Screen
+        name="MonthDetail"
+        component={MonthDetailScreen}
+        options={{title: ''}}
       />
     </Stack.Navigator>
   );
-};
+}

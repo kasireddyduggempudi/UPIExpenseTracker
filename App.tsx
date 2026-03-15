@@ -8,11 +8,11 @@ const appTheme = {
   ...DefaultTheme,
   colors: {
     ...DefaultTheme.colors,
-    background: '#f4f7fb',
-    card: '#ffffff',
-    text: '#0f172a',
-    border: '#dce3ed',
-    primary: '#115e59',
+    background: '#F8FAF9',
+    card: '#FFFFFF',
+    text: '#1B1B2F',
+    border: '#E5E7EB',
+    primary: '#2D6A4F',
   },
 };
 
@@ -20,7 +20,7 @@ function App(): React.JSX.Element {
   return (
     <GestureHandlerRootView style={styles.root}>
       <NavigationContainer theme={appTheme}>
-        <StatusBar barStyle="dark-content" backgroundColor="#f4f7fb" />
+        <StatusBar barStyle="dark-content" backgroundColor="#F8FAF9" />
         <AppNavigator />
       </NavigationContainer>
     </GestureHandlerRootView>

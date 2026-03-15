@@ -1,12 +1,10 @@
-import {UPIParsedData} from '../utils/upiParser';
-
 export type RootStackParamList = {
-  Payment:
-    | {
-        scannedData?: UPIParsedData;
-      }
-    | undefined;
-  Scanner: undefined;
   Dashboard: undefined;
-  History: undefined;
+  AddExpense: undefined;
+  MonthDetail: {
+    year: number;
+    month: number;
+    /** e.g. 'Mar 2025' */
+    label: string;
+  };
 };
