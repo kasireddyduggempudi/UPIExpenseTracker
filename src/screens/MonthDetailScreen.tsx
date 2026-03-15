@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import {useFocusEffect} from '@react-navigation/native';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
+import Svg, {Path} from 'react-native-svg';
 import {RootStackParamList} from '../navigation/types';
 import {
   deleteExpense,
@@ -32,6 +33,66 @@ const CARD_BG = '#FFFFFF';
 const TEXT_PRIMARY = '#1B1B2F';
 const TEXT_SEC = '#6B7280';
 const DANGER = '#EF4444';
+
+function EditIcon() {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M4 20h4l10.5-10.5a1.414 1.414 0 0 0 0-2L16.5 5.5a1.414 1.414 0 0 0-2 0L4 16v4Z"
+        stroke={PRIMARY}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="m13.5 8.5 2 2"
+        stroke={PRIMARY}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+function DeleteIcon() {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M5 7h14"
+        stroke={DANGER}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+      />
+      <Path
+        d="M10 11v5"
+        stroke={DANGER}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+      />
+      <Path
+        d="M14 11v5"
+        stroke={DANGER}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+      />
+      <Path
+        d="M7 7l1 11a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2l1-11"
+        stroke={DANGER}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"
+        stroke={DANGER}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
 
 function buildSummaries(transactions: Transaction[]): CategorySummary[] {
   const map: Record<string, CategorySummary> = {};
@@ -113,11 +174,17 @@ function TransactionRow({
         <View style={styles.actionRow}>
           <TouchableOpacity
             style={styles.editButton}
-            onPress={() => onEdit(transaction)}>
-            <Text style={styles.editText}>✏️</Text>
+            onPress={() => onEdit(transaction)}
+            accessibilityRole="button"
+            accessibilityLabel={`Edit ${label}`}>
+            <EditIcon />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.deleteButton} onPress={confirmDelete}>
-            <Text style={styles.deleteText}>🗑</Text>
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={confirmDelete}
+            accessibilityRole="button"
+            accessibilityLabel={`Delete ${label}`}>
+            <DeleteIcon />
           </TouchableOpacity>
         </View>
       </View>
@@ -316,9 +383,7 @@ const styles = StyleSheet.create({
   transactionAmount: {fontSize: 15, fontWeight: '700', color: TEXT_PRIMARY},
   actionRow: {flexDirection: 'row', gap: 10},
   editButton: {paddingVertical: 4},
-  editText: {fontSize: 16, color: PRIMARY},
   deleteButton: {paddingVertical: 4},
-  deleteText: {fontSize: 16, color: DANGER},
   emptyText: {
     textAlign: 'center',
     color: TEXT_SEC,
