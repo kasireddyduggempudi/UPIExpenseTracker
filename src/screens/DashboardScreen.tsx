@@ -51,6 +51,7 @@ export function DashboardScreen({navigation}: Props) {
   const [monthlyLimit, setMonthlyLimitState] = useState<number | null>(null);
   const [limitInput, setLimitInput] = useState('');
   const [savingLimit, setSavingLimit] = useState(false);
+  const [isEditingLimit, setIsEditingLimit] = useState(true);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) {
@@ -64,6 +65,7 @@ export function DashboardScreen({navigation}: Props) {
       setCurrentMonth(summaries[0] ?? null);
       setMonthlyLimitState(limit);
       setLimitInput(limit ? String(limit) : '');
+      setIsEditingLimit(!limit);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -102,6 +104,7 @@ export function DashboardScreen({navigation}: Props) {
       try {
         await setMonthlyLimit(null);
         setMonthlyLimitState(null);
+        setIsEditingLimit(true);
         Alert.alert('Budget Cleared', 'Monthly budget removed.');
       } finally {
         setSavingLimit(false);
@@ -121,11 +124,20 @@ export function DashboardScreen({navigation}: Props) {
     try {
       await setMonthlyLimit(parsed);
       setMonthlyLimitState(parsed);
+      setIsEditingLimit(false);
       Alert.alert('Budget Saved', 'Monthly budget updated successfully.');
     } finally {
       setSavingLimit(false);
     }
   }, [limitInput]);
+
+  const onLimitButtonPress = useCallback(() => {
+    if (monthlyLimit && !isEditingLimit) {
+      setIsEditingLimit(true);
+      return;
+    }
+    onSaveLimit();
+  }, [isEditingLimit, monthlyLimit, onSaveLimit]);
 
   if (loading) {
     return (
@@ -161,22 +173,30 @@ export function DashboardScreen({navigation}: Props) {
           <Text style={styles.sectionTitle}>Monthly Budget</Text>
           <View style={styles.budgetRow}>
             <TextInput
-              style={styles.budgetInput}
+              style={[
+                styles.budgetInput,
+                !isEditingLimit && styles.budgetInputDisabled,
+              ]}
               value={limitInput}
               onChangeText={setLimitInput}
               placeholder="Set monthly limit"
               placeholderTextColor="#9CA3AF"
               keyboardType="decimal-pad"
+              editable={isEditingLimit}
             />
             <TouchableOpacity
               style={[
                 styles.budgetBtn,
                 savingLimit && styles.budgetBtnDisabled,
               ]}
-              onPress={onSaveLimit}
+              onPress={onLimitButtonPress}
               disabled={savingLimit}>
               <Text style={styles.budgetBtnText}>
-                {savingLimit ? 'Saving...' : 'Save'}
+                {savingLimit
+                  ? 'Saving...'
+                  : monthlyLimit && !isEditingLimit
+                  ? '✎'
+                  : 'Save'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -287,6 +307,10 @@ const styles = StyleSheet.create({
     height: 42,
     fontSize: 14,
     color: TEXT,
+  },
+  budgetInputDisabled: {
+    color: MUTED,
+    backgroundColor: '#F3F4F6',
   },
   budgetBtn: {
     height: 42,
