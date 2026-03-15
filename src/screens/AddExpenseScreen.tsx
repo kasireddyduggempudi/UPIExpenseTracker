@@ -1,4 +1,4 @@
-import React, {useCallback, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -16,6 +16,7 @@ import {CATEGORIES, OTHER_CATEGORY_ID} from '../utils/constants';
 import {
   addExpense,
   evaluateBudgetThreshold,
+  updateExpense,
 } from '../services/transactionService';
 import {formatDateDisplay, shiftDate, todayString} from '../utils/dateUtils';
 
@@ -28,13 +29,40 @@ const TEXT_PRIMARY = '#1B1B2F';
 const TEXT_SEC = '#6B7280';
 const BORDER = '#E5E7EB';
 
-export function AddExpenseScreen({navigation}: Props) {
+export function AddExpenseScreen({navigation, route}: Props) {
+  const expense = route.params?.expense;
+  const isEditing = Boolean(expense);
+
   const [amount, setAmount] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('food');
   const [customCategory, setCustomCategory] = useState('');
   const [note, setNote] = useState('');
   const [date, setDate] = useState(todayString());
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    navigation.setOptions({title: isEditing ? 'Edit Expense' : 'Add Expense'});
+  }, [isEditing, navigation]);
+
+  useEffect(() => {
+    if (!expense) {
+      return;
+    }
+
+    setAmount(String(expense.amount));
+    setSelectedCategory(expense.category);
+    setCustomCategory(expense.customCategory ?? '');
+    setNote(expense.note ?? '');
+    setDate(expense.date);
+  }, [expense]);
+
+  const successActions = useMemo(
+    () => [
+      {text: 'OK', onPress: () => navigation.goBack()},
+      {text: 'Dashboard', onPress: () => navigation.navigate('Dashboard')},
+    ],
+    [navigation],
+  );
 
   const shiftDay = useCallback(
     (delta: number) => setDate(prev => shiftDate(prev, delta)),
@@ -56,7 +84,7 @@ export function AddExpenseScreen({navigation}: Props) {
 
     setSaving(true);
     try {
-      await addExpense({
+      const payload = {
         amount: parsedAmount,
         category: selectedCategory,
         customCategory:
@@ -65,14 +93,22 @@ export function AddExpenseScreen({navigation}: Props) {
             : undefined,
         note: note.trim() || undefined,
         date,
-      });
+      };
+
+      if (expense) {
+        await updateExpense(expense.id, payload);
+      } else {
+        await addExpense(payload);
+      }
 
       const budgetEvent = await evaluateBudgetThreshold(date);
 
-      setAmount('');
-      setCustomCategory('');
-      setNote('');
-      setDate(todayString());
+      if (!expense) {
+        setAmount('');
+        setCustomCategory('');
+        setNote('');
+        setDate(todayString());
+      }
 
       if (budgetEvent?.level === 100) {
         Alert.alert(
@@ -80,13 +116,7 @@ export function AddExpenseScreen({navigation}: Props) {
           `You have reached 100% of your monthly budget.\n\nSpent: ${budgetEvent.total.toFixed(
             2,
           )}\nLimit: ${budgetEvent.limit.toFixed(2)}`,
-          [
-            {text: 'OK'},
-            {
-              text: 'Go Home',
-              onPress: () => navigation.navigate('Dashboard'),
-            },
-          ],
+          successActions,
         );
       } else if (budgetEvent?.level === 80) {
         Alert.alert(
@@ -94,26 +124,46 @@ export function AddExpenseScreen({navigation}: Props) {
           `You have used 80% of your monthly budget.\n\nSpent: ${budgetEvent.total.toFixed(
             2,
           )}\nLimit: ${budgetEvent.limit.toFixed(2)}`,
-          [
-            {text: 'Continue'},
-            {
-              text: 'Go Home',
-              onPress: () => navigation.navigate('Dashboard'),
-            },
-          ],
+          successActions,
         );
       } else {
-        Alert.alert('Saved', 'Expense recorded successfully.', [
-          {text: 'Add Another'},
-          {text: 'Dashboard', onPress: () => navigation.navigate('Dashboard')},
-        ]);
+        Alert.alert(
+          isEditing ? 'Updated' : 'Saved',
+          isEditing
+            ? 'Expense updated successfully.'
+            : 'Expense recorded successfully.',
+          isEditing
+            ? successActions
+            : [
+                {text: 'Add Another'},
+                {
+                  text: 'Dashboard',
+                  onPress: () => navigation.navigate('Dashboard'),
+                },
+              ],
+        );
       }
     } catch {
-      Alert.alert('Error', 'Could not save expense. Please try again.');
+      Alert.alert(
+        'Error',
+        isEditing
+          ? 'Could not update expense. Please try again.'
+          : 'Could not save expense. Please try again.',
+      );
     } finally {
       setSaving(false);
     }
-  }, [amount, selectedCategory, customCategory, note, date, navigation]);
+  }, [
+    amount,
+    customCategory,
+    date,
+    expense,
+    isEditing,
+    navigation,
+    note,
+    selectedCategory,
+    successActions,
+  ]);
 
   return (
     <KeyboardAvoidingView
@@ -218,7 +268,13 @@ export function AddExpenseScreen({navigation}: Props) {
           onPress={handleSave}
           disabled={saving}>
           <Text style={styles.saveButtonText}>
-            {saving ? 'Saving...' : 'Save Expense'}
+            {saving
+              ? isEditing
+                ? 'Updating...'
+                : 'Saving...'
+              : isEditing
+              ? 'Update Expense'
+              : 'Save Expense'}
           </Text>
         </TouchableOpacity>
       </ScrollView>

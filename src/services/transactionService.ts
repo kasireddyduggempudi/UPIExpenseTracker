@@ -29,6 +29,13 @@ export async function addExpense(
   return activeRepository.add(data);
 }
 
+export async function updateExpense(
+  id: string,
+  data: Omit<Transaction, 'id' | 'createdAt'>,
+): Promise<Transaction> {
+  return activeRepository.update(id, data);
+}
+
 export async function getTransactionsByMonth(
   year: number,
   month: number,

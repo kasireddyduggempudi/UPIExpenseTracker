@@ -62,7 +62,13 @@ export function DashboardScreen({navigation}: Props) {
         getLast2YearsMonthlySummaries(),
         getMonthlyLimit(),
       ]);
-      setCurrentMonth(summaries[0] ?? null);
+      const now = new Date();
+      const summaryForCurrentMonth = summaries.find(
+        summary =>
+          summary.year === now.getFullYear() &&
+          summary.month === now.getMonth() + 1,
+      );
+      setCurrentMonth(summaryForCurrentMonth ?? null);
       setMonthlyLimitState(limit);
       setLimitInput(limit ? String(limit) : '');
       setIsEditingLimit(!limit);

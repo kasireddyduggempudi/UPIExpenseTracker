@@ -82,6 +82,44 @@ export class SqliteTransactionRepository implements ITransactionRepository {
     return record;
   }
 
+  async update(
+    id: string,
+    data: Omit<Transaction, 'id' | 'createdAt'>,
+  ): Promise<Transaction> {
+    const db = await this.getDb();
+
+    const [existingResult] = await db.executeSql(
+      `SELECT createdAt FROM ${TABLE} WHERE id = ? LIMIT 1;`,
+      [id],
+    );
+
+    if (existingResult.rows.length === 0) {
+      throw new Error('Expense not found');
+    }
+
+    const createdAt = existingResult.rows.item(0).createdAt as string;
+
+    await db.executeSql(
+      `UPDATE ${TABLE}
+       SET amount = ?, category = ?, customCategory = ?, note = ?, date = ?
+       WHERE id = ?;`,
+      [
+        data.amount,
+        data.category,
+        data.customCategory ?? null,
+        data.note ?? null,
+        data.date,
+        id,
+      ],
+    );
+
+    return {
+      ...data,
+      id,
+      createdAt,
+    };
+  }
+
   async getByMonth(year: number, month: number): Promise<Transaction[]> {
     const db = await this.getDb();
     const prefix = `${year}-${padMonth(month)}`;
@@ -166,7 +204,7 @@ export class SqliteTransactionRepository implements ITransactionRepository {
       });
     }
 
-    return summaries;
+    return summaries.filter(summary => summary.total > 0);
   }
 
   async getYearlySummaries(years: number): Promise<YearlySummary[]> {
@@ -217,7 +255,7 @@ export class SqliteTransactionRepository implements ITransactionRepository {
       });
     }
 
-    return summaries;
+    return summaries.filter(summary => summary.total > 0);
   }
 
   async delete(id: string): Promise<void> {

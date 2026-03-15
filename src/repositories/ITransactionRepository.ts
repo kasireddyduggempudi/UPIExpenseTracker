@@ -14,6 +14,12 @@ export interface ITransactionRepository {
   /** Persist a new expense and return the saved record (with id + createdAt). */
   add(data: Omit<Transaction, 'id' | 'createdAt'>): Promise<Transaction>;
 
+  /** Update an existing expense and return the saved record. */
+  update(
+    id: string,
+    data: Omit<Transaction, 'id' | 'createdAt'>,
+  ): Promise<Transaction>;
+
   /** All transactions for a specific calendar month (month is 1-based). */
   getByMonth(year: number, month: number): Promise<Transaction[]>;
 

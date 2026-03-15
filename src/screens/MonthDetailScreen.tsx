@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useState} from 'react';
+import React, {useCallback, useState} from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import {useFocusEffect} from '@react-navigation/native';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {RootStackParamList} from '../navigation/types';
 import {
@@ -59,9 +60,11 @@ function buildSummaries(transactions: Transaction[]): CategorySummary[] {
 
 function TransactionRow({
   transaction,
+  onEdit,
   onDelete,
 }: {
   transaction: Transaction;
+  onEdit: (transaction: Transaction) => void;
   onDelete: (id: string) => void;
 }) {
   const categoryMeta = CATEGORY_MAP[transaction.category];
@@ -107,9 +110,16 @@ function TransactionRow({
         <Text style={styles.transactionAmount}>
           {formatAmount(transaction.amount)}
         </Text>
-        <TouchableOpacity style={styles.deleteButton} onPress={confirmDelete}>
-          <Text style={styles.deleteText}>x</Text>
-        </TouchableOpacity>
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={() => onEdit(transaction)}>
+            <Text style={styles.editText}>Edit</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.deleteButton} onPress={confirmDelete}>
+            <Text style={styles.deleteText}>🗑</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -130,10 +140,12 @@ export function MonthDetailScreen({route, navigation}: Props) {
     }
   }, [year, month]);
 
-  useEffect(() => {
-    navigation.setOptions({title: monthFullLabel(year, month)});
-    load();
-  }, [navigation, year, month, load]);
+  useFocusEffect(
+    useCallback(() => {
+      navigation.setOptions({title: monthFullLabel(year, month)});
+      load();
+    }, [navigation, year, month, load]),
+  );
 
   const handleDelete = useCallback(async (id: string) => {
     try {
@@ -143,6 +155,13 @@ export function MonthDetailScreen({route, navigation}: Props) {
       Alert.alert('Error', 'Could not delete this expense.');
     }
   }, []);
+
+  const handleEdit = useCallback(
+    (transaction: Transaction) => {
+      navigation.navigate('AddExpense', {expense: transaction});
+    },
+    [navigation],
+  );
 
   const categorySummaries = buildSummaries(transactions);
   const total = transactions.reduce((sum, item) => sum + item.amount, 0);
@@ -162,7 +181,11 @@ export function MonthDetailScreen({route, navigation}: Props) {
       data={transactions}
       keyExtractor={item => item.id}
       renderItem={({item}) => (
-        <TransactionRow transaction={item} onDelete={handleDelete} />
+        <TransactionRow
+          transaction={item}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+        />
       )}
       ListHeaderComponent={
         <>
@@ -291,8 +314,11 @@ const styles = StyleSheet.create({
   transactionDate: {fontSize: 11, color: TEXT_SEC, marginTop: 3},
   transactionRight: {alignItems: 'flex-end', gap: 6},
   transactionAmount: {fontSize: 15, fontWeight: '700', color: TEXT_PRIMARY},
-  deleteButton: {padding: 4},
-  deleteText: {fontSize: 13, color: DANGER},
+  actionRow: {flexDirection: 'row', gap: 10},
+  editButton: {paddingVertical: 4},
+  editText: {fontSize: 13, color: PRIMARY, fontWeight: '600'},
+  deleteButton: {paddingVertical: 4},
+  deleteText: {fontSize: 16, color: DANGER},
   emptyText: {
     textAlign: 'center',
     color: TEXT_SEC,

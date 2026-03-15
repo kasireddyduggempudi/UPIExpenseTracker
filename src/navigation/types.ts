@@ -1,7 +1,13 @@
+import {Transaction} from '../models/Transaction';
+
 export type RootStackParamList = {
   Dashboard: undefined;
   History: undefined;
-  AddExpense: undefined;
+  AddExpense:
+    | {
+        expense?: Transaction;
+      }
+    | undefined;
   MonthDetail: {
     year: number;
     month: number;
