@@ -249,6 +249,14 @@ export function HistoryScreen({navigation}: Props) {
           <Text style={styles.navIcon}>🧾</Text>
           <Text style={[styles.navText, styles.navTextActive]}>History</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navItem}
+          activeOpacity={0.9}
+          onPress={() => navigation.navigate('ManageCategories')}>
+          <Text style={styles.navIcon}>🏷️</Text>
+          <Text style={styles.navText}>Categories</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
