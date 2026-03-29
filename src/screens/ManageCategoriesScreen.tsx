@@ -2,7 +2,6 @@ import React, {useCallback, useMemo, useState} from 'react';
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   StyleSheet,
   Text,
   TextInput,
@@ -11,12 +10,16 @@ import {
 } from 'react-native';
 import {useFocusEffect} from '@react-navigation/native';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
+import DraggableFlatList, {
+  RenderItemParams,
+} from 'react-native-draggable-flatlist';
 import {RootStackParamList} from '../navigation/types';
 import {Category, OTHER_CATEGORY_ID} from '../utils/constants';
 import {
   addCategory,
   deleteCategory,
   getCategories,
+  reorderCategories,
   updateCategory,
 } from '../services/transactionService';
 
@@ -42,6 +45,7 @@ const ICON_PRESETS = [
   '✈️',
   '💡',
 ];
+
 const COLOR_PRESETS = [
   '#FF6B6B',
   '#2ECC71',
@@ -59,6 +63,7 @@ export function ManageCategoriesScreen({navigation}: Props) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [moving, setMoving] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [nameInput, setNameInput] = useState('');
@@ -163,6 +168,61 @@ export function ManageCategoriesScreen({navigation}: Props) {
     [editingId, load, resetForm],
   );
 
+  const onDragEnd = useCallback(
+    async ({data}: {data: Category[]}) => {
+      setCategories(data);
+      setMoving(true);
+      try {
+        await reorderCategories(data.map(category => category.id));
+      } catch {
+        await load();
+        Alert.alert('Error', 'Could not update category order.');
+      } finally {
+        setMoving(false);
+      }
+    },
+    [load],
+  );
+
+  const renderCategoryItem = useCallback(
+    ({item, drag, isActive}: RenderItemParams<Category>) => {
+      const locked = item.id === OTHER_CATEGORY_ID;
+
+      return (
+        <View style={[styles.itemCard, isActive && styles.itemCardActive]}>
+          <View style={[styles.iconWrap, {backgroundColor: `${item.color}20`}]}>
+            <Text style={styles.itemIcon}>{item.icon}</Text>
+          </View>
+          <View style={styles.itemBody}>
+            <Text style={styles.itemName}>{item.label}</Text>
+            <Text style={styles.itemSub}>{item.color}</Text>
+          </View>
+          <View style={styles.itemActions}>
+            <TouchableOpacity
+              style={[styles.dragBtn, moving && styles.buttonDisabled]}
+              onLongPress={drag}
+              disabled={moving}
+              delayLongPress={120}>
+              <Text style={styles.dragBtnText}>≡</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.editBtn}
+              onPress={() => startEdit(item)}>
+              <Text style={styles.editBtnText}>Edit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.deleteBtn, locked && styles.buttonDisabled]}
+              onPress={() => onDelete(item)}
+              disabled={locked}>
+              <Text style={styles.deleteBtnText}>Delete</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    },
+    [moving, onDelete, startEdit],
+  );
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -173,126 +233,109 @@ export function ManageCategoriesScreen({navigation}: Props) {
 
   return (
     <View style={styles.root}>
-      <FlatList
+      <DraggableFlatList
         data={categories}
         keyExtractor={item => item.id}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
+        onDragEnd={onDragEnd}
+        renderItem={renderCategoryItem}
+        activationDistance={8}
         ListHeaderComponent={
-          <View style={styles.card}>
-            <Text style={styles.title}>
-              {isEditing ? 'Edit Category' : 'Add Category'}
-            </Text>
+          <>
+            <View style={styles.hintCard}>
+              <Text style={styles.hintText}>
+                Long-press the {'≡'} handle and drag to reorder categories.
+              </Text>
+            </View>
 
-            <Text style={styles.label}>Category Name</Text>
-            <TextInput
-              style={styles.input}
-              value={nameInput}
-              onChangeText={setNameInput}
-              placeholder="Eg: Gym"
-              placeholderTextColor={TEXT_SEC}
-              maxLength={30}
-            />
+            <View style={styles.card}>
+              <Text style={styles.title}>
+                {isEditing ? 'Edit Category' : 'Add Category'}
+              </Text>
 
-            <Text style={styles.label}>Icon</Text>
-            <TextInput
-              style={styles.input}
-              value={iconInput}
-              onChangeText={setIconInput}
-              placeholder="Eg: 🏋️"
-              placeholderTextColor={TEXT_SEC}
-              maxLength={2}
-            />
-            <View style={styles.choiceRow}>
-              {ICON_PRESETS.map(icon => (
+              <Text style={styles.label}>Category Name</Text>
+              <TextInput
+                style={styles.input}
+                value={nameInput}
+                onChangeText={setNameInput}
+                placeholder="Eg: Gym"
+                placeholderTextColor={TEXT_SEC}
+                maxLength={30}
+              />
+
+              <Text style={styles.label}>Icon</Text>
+              <TextInput
+                style={styles.input}
+                value={iconInput}
+                onChangeText={setIconInput}
+                placeholder="Eg: 🏋️"
+                placeholderTextColor={TEXT_SEC}
+                maxLength={2}
+              />
+              <View style={styles.choiceRow}>
+                {ICON_PRESETS.map(icon => (
+                  <TouchableOpacity
+                    key={icon}
+                    style={[
+                      styles.choiceChip,
+                      iconInput === icon && styles.choiceChipSelected,
+                    ]}
+                    onPress={() => setIconInput(icon)}>
+                    <Text style={styles.choiceChipText}>{icon}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.label}>Color</Text>
+              <TextInput
+                style={styles.input}
+                value={colorInput}
+                onChangeText={setColorInput}
+                placeholder="#2D6A4F"
+                placeholderTextColor={TEXT_SEC}
+                autoCapitalize="characters"
+                maxLength={7}
+              />
+              <View style={styles.choiceRow}>
+                {COLOR_PRESETS.map(color => (
+                  <TouchableOpacity
+                    key={color}
+                    style={[
+                      styles.colorChip,
+                      {backgroundColor: color},
+                      colorInput.toLowerCase() === color.toLowerCase() &&
+                        styles.colorChipSelected,
+                    ]}
+                    onPress={() => setColorInput(color)}
+                  />
+                ))}
+              </View>
+
+              <View style={styles.actionRow}>
+                {isEditing && (
+                  <TouchableOpacity
+                    style={styles.secondaryBtn}
+                    onPress={resetForm}>
+                    <Text style={styles.secondaryBtnText}>Cancel</Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
-                  key={icon}
-                  style={[
-                    styles.choiceChip,
-                    iconInput === icon && styles.choiceChipSelected,
-                  ]}
-                  onPress={() => setIconInput(icon)}>
-                  <Text style={styles.choiceChipText}>{icon}</Text>
+                  style={[styles.primaryBtn, saving && styles.buttonDisabled]}
+                  onPress={onSubmit}
+                  disabled={saving}>
+                  <Text style={styles.primaryBtnText}>
+                    {saving
+                      ? 'Saving...'
+                      : isEditing
+                      ? 'Update Category'
+                      : 'Add Category'}
+                  </Text>
                 </TouchableOpacity>
-              ))}
+              </View>
             </View>
-
-            <Text style={styles.label}>Color</Text>
-            <TextInput
-              style={styles.input}
-              value={colorInput}
-              onChangeText={setColorInput}
-              placeholder="#2D6A4F"
-              placeholderTextColor={TEXT_SEC}
-              autoCapitalize="characters"
-              maxLength={7}
-            />
-            <View style={styles.choiceRow}>
-              {COLOR_PRESETS.map(color => (
-                <TouchableOpacity
-                  key={color}
-                  style={[
-                    styles.colorChip,
-                    {backgroundColor: color},
-                    colorInput.toLowerCase() === color.toLowerCase() &&
-                      styles.colorChipSelected,
-                  ]}
-                  onPress={() => setColorInput(color)}
-                />
-              ))}
-            </View>
-
-            <View style={styles.actionRow}>
-              {isEditing && (
-                <TouchableOpacity
-                  style={styles.secondaryBtn}
-                  onPress={resetForm}>
-                  <Text style={styles.secondaryBtnText}>Cancel</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={[styles.primaryBtn, saving && styles.buttonDisabled]}
-                onPress={onSubmit}
-                disabled={saving}>
-                <Text style={styles.primaryBtnText}>
-                  {saving
-                    ? 'Saving...'
-                    : isEditing
-                    ? 'Update Category'
-                    : 'Add Category'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+          </>
         }
-        renderItem={({item}) => {
-          const locked = item.id === OTHER_CATEGORY_ID;
-          return (
-            <View style={styles.itemCard}>
-              <View
-                style={[styles.iconWrap, {backgroundColor: `${item.color}20`}]}>
-                <Text style={styles.itemIcon}>{item.icon}</Text>
-              </View>
-              <View style={styles.itemBody}>
-                <Text style={styles.itemName}>{item.label}</Text>
-                <Text style={styles.itemSub}>{item.color}</Text>
-              </View>
-              <View style={styles.itemActions}>
-                <TouchableOpacity
-                  style={styles.editBtn}
-                  onPress={() => startEdit(item)}>
-                  <Text style={styles.editBtnText}>Edit</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.deleteBtn, locked && styles.buttonDisabled]}
-                  onPress={() => onDelete(item)}
-                  disabled={locked}>
-                  <Text style={styles.deleteBtnText}>Delete</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          );
-        }}
         ListFooterComponent={
           <TouchableOpacity
             style={styles.doneBtn}
@@ -314,6 +357,20 @@ const styles = StyleSheet.create({
     backgroundColor: BG,
   },
   content: {padding: 16, paddingBottom: 30},
+  hintCard: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  hintText: {
+    fontSize: 13,
+    color: '#065F46',
+    fontWeight: '600',
+  },
   card: {
     backgroundColor: CARD_BG,
     borderRadius: 14,
@@ -414,6 +471,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  itemCardActive: {
+    borderWidth: 1,
+    borderColor: PRIMARY,
+  },
   iconWrap: {
     width: 40,
     height: 40,
@@ -427,6 +488,15 @@ const styles = StyleSheet.create({
   itemName: {fontSize: 15, fontWeight: '700', color: TEXT_PRIMARY},
   itemSub: {fontSize: 12, color: TEXT_SEC, marginTop: 2},
   itemActions: {flexDirection: 'row', gap: 8},
+  dragBtn: {
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: '#FFFFFF',
+  },
+  dragBtnText: {color: TEXT_PRIMARY, fontWeight: '700', fontSize: 12},
   editBtn: {
     borderWidth: 1,
     borderColor: PRIMARY,

@@ -81,6 +81,10 @@ export async function deleteCategory(id: string): Promise<void> {
   return activeRepository.deleteCategory(id);
 }
 
+export async function reorderCategories(categoryIds: string[]): Promise<void> {
+  return activeRepository.reorderCategories(categoryIds);
+}
+
 const getMonthKey = (date: string): string => date.slice(0, 7);
 
 const parseMonthFromDate = (date: string): {year: number; month: number} => {

@@ -504,6 +504,29 @@ export class SqliteTransactionRepository implements ITransactionRepository {
       throw error;
     }
   }
+
+  async reorderCategories(categoryIds: string[]): Promise<void> {
+    if (categoryIds.length === 0) {
+      return;
+    }
+
+    const db = await this.getDb();
+    await db.executeSql('BEGIN TRANSACTION;');
+    try {
+      for (let i = 0; i < categoryIds.length; i++) {
+        await db.executeSql(
+          `UPDATE ${CATEGORIES_TABLE}
+           SET sortOrder = ?
+           WHERE id = ?;`,
+          [i, categoryIds[i]],
+        );
+      }
+      await db.executeSql('COMMIT;');
+    } catch (error) {
+      await db.executeSql('ROLLBACK;');
+      throw error;
+    }
+  }
 }
 
 // Singleton — keeps one open DB connection for the lifetime of the app

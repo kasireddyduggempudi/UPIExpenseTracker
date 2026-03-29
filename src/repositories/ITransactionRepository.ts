@@ -70,4 +70,7 @@ export interface ITransactionRepository {
 
   /** Delete category and move its expenses to the fallback category. */
   deleteCategory(id: string): Promise<void>;
+
+  /** Persist explicit category order by category ids in display sequence. */
+  reorderCategories(categoryIds: string[]): Promise<void>;
 }
